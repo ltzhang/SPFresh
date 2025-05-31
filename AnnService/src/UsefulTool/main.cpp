@@ -18,54 +18,54 @@ class ToolOptions : public Helper::ReaderOptions
 public:
     ToolOptions():Helper::ReaderOptions(VectorValueType::Float, 0, VectorFileType::TXT, "|", 32)
     {
-        AddOptionalOption(newDataSetFileName, "-NewDataSetFileName", "--NewDataSetFileName", "1");
-        AddOptionalOption(currentListFileName, "-CurrentListFileName", "--CurrentListFileName", "1");
-        AddOptionalOption(reserveListFileName, "-ReserveListFileName", "--ReserveListFileName", "1");
-        AddOptionalOption(traceFileName, "-TraceFileName", "--TraceFileName", "1");
-        AddOptionalOption(baseNum, "-BaseNum", "--BaseNum", "1");
-        AddOptionalOption(reserveNum, "-ReserveNum", "--ReserveNum", "1");
-        AddOptionalOption(updateSize, "-UpdateSize", "--UpdateSize", "1");
-        AddOptionalOption(batch, "-Batch", "--Batch", "1");
-        AddOptionalOption(genTrace, "-GenTrace", "--GenTrace", "1");
-        AddOptionalOption(convertTruth, "-ConvertTruth", "--ConvertTruth", "1");
-        AddOptionalOption(callRecall, "-CallRecall", "--CallRecall", "1");
-        AddOptionalOption(genSet, "-GenSet", "--GenSet", "1");
-        AddOptionalOption(genStress, "-GenStress", "--GenStress", "1");
-        AddOptionalOption(m_vectorPath, "-VectorPath", "--VectorPath", "1");
+        AddOptionalOption(newDataSetFileName, "-ndf", "--NewDataSetFileName", "New dataset file name.");
+        AddOptionalOption(currentListFileName, "-clf", "--CurrentListFileName", "Current list file name.");
+        AddOptionalOption(reserveListFileName, "-rlfe", "--ReserveListFileName", "Reserve list file name.");
+        AddOptionalOption(traceFileName, "-tf", "--TraceFileName", "Trace file name.");
+        AddOptionalOption(baseNum, "-bn", "--BaseNum", "Base vector number.");
+        AddOptionalOption(reserveNum, "-rn", "--ReserveNum", "Reserve number.");
+        AddOptionalOption(updateSize, "-us", "--UpdateSize", "Update size.");
+        AddOptionalOption(batch, "-bs", "--Batch", "Batch size.");
+        AddOptionalOption(genTrace, "-gt", "--GenTrace", "Gen trace.");
+        AddOptionalOption(convertTruth, "-ct", "--ConvertTruth", "Convert Truth.");
+        AddOptionalOption(callRecall, "-cr", "--CallRecall", "Calculate Recall.");
+        AddOptionalOption(genSet, "-gs", "--GenSet", "Generate set.");
+        AddOptionalOption(genStress, "-gss", "--GenStress", "Generate stress data.");
+        AddOptionalOption(m_vectorPath, "-vp", "--VectorPath", "Vector Path");
         AddOptionalOption(m_distCalcMethod, "-m", "--dist", "Distance method (L2 or Cosine).");
-        AddOptionalOption(m_resultNum, "-resultNum", "--resultNum", "1");
-        AddOptionalOption(m_querySize, "-querySize", "--querySize", "1");
-        AddOptionalOption(m_truthPath, "-truthPath", "--truthPath", "1");
-        AddOptionalOption(m_truthType, "-truthType", "--truthType", "1");
-        AddOptionalOption(m_queryPath, "-queryPath", "--queryPath", "1");
-        AddOptionalOption(m_searchResult, "-searchResult", "--searchResult", "1");
+        AddOptionalOption(m_resultNum, "-rn", "--resultNum", "Result num.");
+        AddOptionalOption(m_querySize, "-qs", "--querySize", "Query size.");
+        AddOptionalOption(m_truthPath, "-tp", "--truthPath", "Truth path.");
+        AddOptionalOption(m_truthType, "-tt", "--truthType", "Truth type.");
+        AddOptionalOption(m_queryPath, "-qp", "--queryPath", "Query path.");
+        AddOptionalOption(m_searchResult, "-sr", "--searchResult", "Search result path.");
     }
 
     ~ToolOptions() {}
 
-    std::string newDataSetFileName;
-    std::string currentListFileName;
-    std::string reserveListFileName;
-    std::string traceFileName;
-    std::string m_vectorPath;
-    int baseNum;
-    int reserveNum;
-    int updateSize;
-    int batch;
-    bool genTrace;
-    bool convertTruth;
-    bool callRecall;
-    bool genSet;
-    bool genStress;
+    std::string newDataSetFileName = "";
+    std::string currentListFileName = "";
+    std::string reserveListFileName = "";
+    std::string traceFileName = "";
+    std::string m_vectorPath = "";
+    int baseNum = 1;
+    int reserveNum = 1;
+    int updateSize = 1;
+    int batch = 1;
+    bool genTrace = false;
+    bool convertTruth = false;
+    bool callRecall = false;
+    bool genSet = false;
+    bool genStress = false;
     DistCalcMethod m_distCalcMethod = DistCalcMethod::L2;
-    int m_resultNum;
-    int m_querySize;
-    std::string m_truthPath;
-    TruthFileType m_truthType;
-    std::string m_queryPath;
-    std::string m_searchResult;
-    std::string m_headVectorFile;
-    std::string m_headIDFile;
+    int m_resultNum = 1;
+    int m_querySize = 1;
+    std::string m_truthPath = "";
+    TruthFileType m_truthType = TruthFileType::DEFAULT;
+    std::string m_queryPath = "";
+    std::string m_searchResult = "";
+    std::string m_headVectorFile = "";
+    std::string m_headIDFile = "";
     
 } options;
 
