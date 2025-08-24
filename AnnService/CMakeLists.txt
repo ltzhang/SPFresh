@@ -1,21 +1,43 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
+# Add option to enable/disable SPDK support
+option(USE_SPDK "Enable SPDK support" OFF)
+
+if(USE_SPDK)
+    add_definitions(-DUSE_SPDK)
+    set(Spdk ${PROJECT_SOURCE_DIR}/ThirdParty/spdk/build)
+    set(Dpdk ${PROJECT_SOURCE_DIR}/ThirdParty/spdk/dpdk/build)
+    set(IsalLCrypto ${PROJECT_SOURCE_DIR}/ThirdParty/isal-l_crypto/.libs/libisal_crypto.a)
+    set(SpdkLibPrefix ${Spdk}/lib/libspdk_)
+    set(DpdkLibPrefix ${Dpdk}/lib/librte_)
+    set(SPDK_LIBRARIES -Wl,--whole-archive ${SpdkLibPrefix}bdev_nvme.a ${SpdkLibPrefix}bdev.a ${SpdkLibPrefix}nvme.a ${SpdkLibPrefix}vfio_user.a ${SpdkLibPrefix}sock.a ${SpdkLibPrefix}dma.a ${SpdkLibPrefix}notify.a ${SpdkLibPrefix}accel.a ${SpdkLibPrefix}event_bdev.a ${SpdkLibPrefix}event_accel.a ${SpdkLibPrefix}vmd.a ${SpdkLibPrefix}event_vmd.a ${SpdkLibPrefix}event_sock.a ${SpdkLibPrefix}event_iobuf.a ${SpdkLibPrefix}event.a ${SpdkLibPrefix}env_dpdk.a ${SpdkLibPrefix}log.a ${SpdkLibPrefix}thread.a ${SpdkLibPrefix}rpc.a ${SpdkLibPrefix}init.a ${SpdkLibPrefix}jsonrpc.a ${SpdkLibPrefix}json.a ${SpdkLibPrefix}trace.a ${SpdkLibPrefix}util.a ${DpdkLibPrefix}mempool.a ${DpdkLibPrefix}mempool_ring.a ${DpdkLibPrefix}eal.a ${DpdkLibPrefix}ring.a ${DpdkLibPrefix}telemetry.a ${DpdkLibPrefix}bus_pci.a ${DpdkLibPrefix}kvargs.a ${DpdkLibPrefix}pci.a -Wl,--no-whole-archive dl rt isal ${IsalLCrypto} uuid)
+    message(STATUS "SPDK support enabled")
+else()
+    set(SPDK_LIBRARIES "")
+    set(IsalLCrypto "")
+    message(STATUS "SPDK support disabled")
+endif()
+
 set(AnnService ${PROJECT_SOURCE_DIR}/AnnService)
 set(Zstd ${PROJECT_SOURCE_DIR}/ThirdParty/zstd)
-set(Spdk ${PROJECT_SOURCE_DIR}/ThirdParty/spdk/build)
-set(Dpdk ${PROJECT_SOURCE_DIR}/ThirdParty/spdk/dpdk/build)
-set(IsalLCrypto ${PROJECT_SOURCE_DIR}/ThirdParty/isal-l_crypto/.libs/libisal_crypto.a)
-set(SpdkLibPrefix ${Spdk}/lib/libspdk_)
-set(DpdkLibPrefix ${Dpdk}/lib/librte_)
-set(SPDK_LIBRARIES -Wl,--whole-archive ${SpdkLibPrefix}bdev_nvme.a ${SpdkLibPrefix}bdev.a ${SpdkLibPrefix}nvme.a ${SpdkLibPrefix}vfio_user.a ${SpdkLibPrefix}sock.a ${SpdkLibPrefix}dma.a ${SpdkLibPrefix}notify.a ${SpdkLibPrefix}accel.a ${SpdkLibPrefix}event_bdev.a ${SpdkLibPrefix}event_accel.a ${SpdkLibPrefix}vmd.a ${SpdkLibPrefix}event_vmd.a ${SpdkLibPrefix}event_sock.a ${SpdkLibPrefix}event_iobuf.a ${SpdkLibPrefix}event.a ${SpdkLibPrefix}env_dpdk.a ${SpdkLibPrefix}log.a ${SpdkLibPrefix}thread.a ${SpdkLibPrefix}rpc.a ${SpdkLibPrefix}init.a ${SpdkLibPrefix}jsonrpc.a ${SpdkLibPrefix}json.a ${SpdkLibPrefix}trace.a ${SpdkLibPrefix}util.a ${DpdkLibPrefix}mempool.a ${DpdkLibPrefix}mempool_ring.a ${DpdkLibPrefix}eal.a ${DpdkLibPrefix}ring.a ${DpdkLibPrefix}telemetry.a ${DpdkLibPrefix}bus_pci.a ${DpdkLibPrefix}kvargs.a ${DpdkLibPrefix}pci.a -Wl,--no-whole-archive dl rt isal ${IsalLCrypto} uuid)
 
 include_directories(${AnnService})
 include_directories(${Zstd}/lib)
-include_directories(${Spdk}/include)
+
+if(USE_SPDK)
+    include_directories(${Spdk}/include)
+endif()
 
 file(GLOB_RECURSE HDR_FILES ${AnnService}/inc/Core/*.h  ${AnnService}/inc/Helper/*.h)
 file(GLOB_RECURSE SRC_FILES ${AnnService}/src/Core/*.cpp ${AnnService}/src/Helper/*.cpp)
+
+# Conditionally exclude SPDK-related files when USE_SPDK is OFF
+if(NOT USE_SPDK)
+    list(FILTER HDR_FILES EXCLUDE REGEX ".*ExtraSPDKController\\.h$")
+    list(FILTER SRC_FILES EXCLUDE REGEX ".*ExtraSPDKController\\.cpp$")
+    message(STATUS "Excluding SPDK source files from build")
+endif()
 
 list(REMOVE_ITEM HDR_FILES
     ${AnnService}/inc/Core/Common/DistanceUtils.h
@@ -44,17 +66,28 @@ if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
     target_compile_options(DistanceUtils PRIVATE -mavx2 -mavx -msse -msse2 -mavx512f -mavx512bw -mavx512dq -fPIC)
 endif()
 
-find_package(RocksDB CONFIG)
-if((DEFINED RocksDB_DIR) AND RocksDB_DIR)
-    list(APPEND RocksDB_LIBRARIES RocksDB::rocksdb)
+# Find RocksDB using standard system paths
+set(ROCKSDB_INCLUDE_DIRS "/usr/local/include")
+set(ROCKSDB_LIBRARY_DIRS "/usr/local/lib")
+set(ROCKSDB_LIBRARIES "rocksdb")
+
+if(EXISTS "${ROCKSDB_INCLUDE_DIRS}/rocksdb/db.h")
+    include_directories(${ROCKSDB_INCLUDE_DIRS})
+    link_directories(${ROCKSDB_LIBRARY_DIRS})
+    list(APPEND RocksDB_LIBRARIES ${ROCKSDB_LIBRARIES})
+    
+    # Find uring if available
     find_package(uring)
     set(uring_LIBRARIES "")
-    message (STATUS "Found RocksDB ${RocksDB_VERSION}")
-    message (STATUS "RocksDB: ${RocksDB_DIR}")
+    
+    message(STATUS "Found RocksDB in standard system location")
+    message(STATUS "RocksDB Include Dir: ${ROCKSDB_INCLUDE_DIRS}")
+    message(STATUS "RocksDB Library Dir: ${ROCKSDB_LIBRARY_DIRS}")
+    message(STATUS "RocksDB Libraries: ${ROCKSDB_LIBRARIES}")
 else()
     set(RocksDB_LIBRARIES "")
     set(uring_LIBRARIES "")
-    message (FATAL_ERROR "Could not find RocksDB!")
+    message(FATAL_ERROR "Could not find RocksDB headers in ${ROCKSDB_INCLUDE_DIRS}/rocksdb/db.h")
 endif()
 
 find_package(TBB REQUIRED)

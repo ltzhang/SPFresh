@@ -3,7 +3,9 @@
 
 #include "inc/Test.h"
 #include "inc/Core/SPANN/ExtraRocksDBController.h"
+#ifdef USE_SPDK
 #include "inc/Core/SPANN/ExtraSPDKController.h"
+#endif
 
 #include <memory>
 #include <chrono>
@@ -45,9 +47,12 @@ void Test(std::string path, std::string type, bool debug = false)
     std::shared_ptr<Helper::KeyValueIO> db;
     if (type == "RocksDB") {
         db.reset(new RocksDBIO(path.c_str(), true));
-    } else if (type == "SPDK") {
+    } 
+#ifdef USE_SPDK
+    else if (type == "SPDK") {
         db.reset(new SPDKIO(path.c_str(), 1024 * 1024, MaxSize, 64));
     }
+#endif
 
     auto t1 = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < totalNum; i++) {

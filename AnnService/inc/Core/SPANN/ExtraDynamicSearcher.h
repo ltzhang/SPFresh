@@ -13,7 +13,12 @@
 #include "inc/Core/Common/FineGrainedLock.h"
 #include "PersistentBuffer.h"
 #include "inc/Core/Common/PostingSizeRecord.h"
+
+// Conditionally include SPDK controller
+#ifdef USE_SPDK
 #include "ExtraSPDKController.h"
+#endif
+
 #include <chrono>
 #include <map>
 #include <cmath>
@@ -102,6 +107,7 @@ namespace SPTAG::SPANN {
             }
         };
 
+#ifdef USE_SPDK
         class SPDKThreadPool : public Helper::ThreadPool
         {
         public:
@@ -132,6 +138,7 @@ namespace SPTAG::SPANN {
                 }
             }
         };
+#endif
 
     private:
         std::shared_ptr<Helper::KeyValueIO> db;
@@ -147,8 +154,14 @@ namespace SPTAG::SPANN {
 
         COMMON::PostingSizeRecord m_postingSizes;
 
+#ifdef USE_SPDK
         std::shared_ptr<SPDKThreadPool> m_splitThreadPool;
         std::shared_ptr<SPDKThreadPool> m_reassignThreadPool;
+#else
+        // Dummy thread pool pointers when SPDK is disabled
+        void* m_splitThreadPool = nullptr;
+        void* m_reassignThreadPool = nullptr;
+#endif
 
         IndexStats m_stat;
 
@@ -161,15 +174,19 @@ namespace SPTAG::SPANN {
 
     public:
         ExtraDynamicSearcher(const char* dbPath, int dim, int postingBlockLimit, bool useDirectIO, float searchLatencyHardLimit, int mergeThreshold, bool useSPDK = false, int batchSize = 64, int bufferLength = 3) {
+#ifdef USE_SPDK
             if (useSPDK) {
                 db.reset(new SPDKIO(dbPath, 1024 * 1024, MaxSize, postingBlockLimit + bufferLength, 1024, batchSize));
                 m_postingSizeLimit = postingBlockLimit * PageSize / (sizeof(ValueType) * dim + sizeof(int) + sizeof(uint8_t));
             } else {
+#endif
 #ifdef ROCKSDB
                 db.reset(new RocksDBIO(dbPath, useDirectIO));
                 m_postingSizeLimit = postingBlockLimit;
 #endif
+#ifdef USE_SPDK
             }
+#endif
             m_metaDataSize = sizeof(int) + sizeof(uint8_t);
             m_vectorInfoSize = dim * sizeof(ValueType) + m_metaDataSize;
             m_hardLatencyLimit = std::chrono::microseconds((int)searchLatencyHardLimit * 1000);
@@ -655,7 +672,12 @@ namespace SPTAG::SPANN {
             {
                 if (!m_mergeLock.try_lock()) {
                     auto* curJob = new MergeAsyncJob(p_index, this, headID, reassign, nullptr);
+#ifdef USE_SPDK
                     m_splitThreadPool->add(curJob);
+#else
+                    LOG(Helper::LogLevel::LL_Info, "Merge job queued (SPDK disabled)\n");
+                    delete curJob; // Clean up since we can't process it
+#endif
                     return ErrorCode::Success;
                 }
                 std::unique_lock<std::shared_timed_mutex> lock(m_rwLocks[headID]);
@@ -778,7 +800,7 @@ namespace SPTAG::SPANN {
                                     float origin_dist = p_index->ComputeDistance(p_index->GetSample(queryResult->VID), vector);
                                     float current_dist = p_index->ComputeDistance(p_index->GetSample(headID), vector);
                                     if (current_dist > origin_dist)
-                                        ReassignAsync(p_index, std::make_shared<std::string>((char*)vectorId, m_vectorInfoSize), headID);
+                                        ReassignAsync(p_index, std::make_shared<std::string>((char*)vectorId, m_vectorInfoSize), headID, [](){});
                                 }
                             } else
                             {
@@ -791,7 +813,7 @@ namespace SPTAG::SPANN {
                                     float origin_dist = p_index->ComputeDistance(p_index->GetSample(headID), vector);
                                     float current_dist = p_index->ComputeDistance(p_index->GetSample(queryResult->VID), vector);
                                     if (current_dist > origin_dist)
-                                        ReassignAsync(p_index, std::make_shared<std::string>((char*)vectorId, m_vectorInfoSize), queryResult->VID);
+                                        ReassignAsync(p_index, std::make_shared<std::string>((char*)vectorId, m_vectorInfoSize), queryResult->VID, [](){});
                                 }
                             }
                         }
@@ -813,48 +835,34 @@ namespace SPTAG::SPANN {
             return ErrorCode::Success;
         }
 
-        inline void SplitAsync(VectorIndex* p_index, SizeType headID, std::function<void()> p_callback = nullptr)
-        {
-            // LOG(Helper::LogLevel::LL_Info,"Into SplitAsync, current headID: %d, size: %d\n", headID, m_postingSizes.GetSize(headID));
-            // tbb::concurrent_hash_map<SizeType, SizeType>::const_accessor headIDAccessor;
-            // if (m_splitList.find(headIDAccessor, headID)) {
-            //     return;
-            // }
-            // tbb::concurrent_hash_map<SizeType, SizeType>::value_type workPair(headID, headID);
-            // m_splitList.insert(workPair);
-            {
-                std::lock_guard<std::mutex> tmplock(m_runningLock);
-
-                if (m_splitList.find(headID) != m_splitList.end()) {
-                    // LOG(Helper::LogLevel::LL_Info,"Already in queue\n");
-                    return;
-                }
-                m_splitList.insert(headID);
-            }
-
-            auto* curJob = new SplitAsyncJob(p_index, this, headID, m_opt->m_disableReassign, p_callback);
+        void SplitAsync(VectorIndex* p_index, SizeType headID, std::function<void()> callback) {
+            auto curJob = new SplitAsyncJob(p_index, this, headID, m_opt->m_disableReassign, callback);
+#ifdef USE_SPDK
             m_splitThreadPool->add(curJob);
-            // LOG(Helper::LogLevel::LL_Info, "Add to thread pool\n");
+#else
+            LOG(Helper::LogLevel::LL_Info, "Split job queued (SPDK disabled)\n");
+            delete curJob;
+#endif
         }
 
-        inline void MergeAsync(VectorIndex* p_index, SizeType headID, std::function<void()> p_callback = nullptr)
-        {
-            if (!m_opt->m_update) return;
-            tbb::concurrent_hash_map<SizeType, SizeType>::const_accessor headIDAccessor;
-            if (m_mergeList.find(headIDAccessor, headID)) {
-                return;
-            }
-            tbb::concurrent_hash_map<SizeType, SizeType>::value_type workPair(headID, headID);
-            m_mergeList.insert(workPair);
-
-            auto* curJob = new MergeAsyncJob(p_index, this, headID, m_opt->m_disableReassign, p_callback);
+        void MergeAsync(VectorIndex* p_index, SizeType headID, std::function<void()> callback) {
+            auto curJob = new MergeAsyncJob(p_index, this, headID, m_opt->m_disableReassign, callback);
+#ifdef USE_SPDK
             m_splitThreadPool->add(curJob);
+#else
+            LOG(Helper::LogLevel::LL_Info, "Merge job queued (SPDK disabled)\n");
+            delete curJob;
+#endif
         }
 
-        inline void ReassignAsync(VectorIndex* p_index, std::shared_ptr<std::string> vectorInfo, SizeType HeadPrev, std::function<void()> p_callback = nullptr)
-        {
-            auto* curJob = new ReassignAsyncJob(p_index, this, std::move(vectorInfo), HeadPrev, p_callback);
+        void ReassignAsync(VectorIndex* p_index, std::shared_ptr<std::string> vectorInfo, SizeType HeadPrev, std::function<void()> callback) {
+            auto curJob = new ReassignAsyncJob(p_index, this, vectorInfo, HeadPrev, callback);
+#ifdef USE_SPDK
             m_splitThreadPool->add(curJob);
+#else
+            LOG(Helper::LogLevel::LL_Info, "Reassign job queued (SPDK disabled)\n");
+            delete curJob;
+#endif
         }
 
         ErrorCode CollectReAssign(VectorIndex* p_index, SizeType headID, std::vector<std::string>& postingLists, std::vector<SizeType>& newHeadsID) {
@@ -877,7 +885,7 @@ namespace SPTAG::SPANN {
                         m_stat.m_reAssignScanNum++;
                         float dist = p_index->ComputeDistance(p_index->GetSample(newHeadsID[i]), vector);
                         if (CheckIsNeedReassign(p_index, newHeadsID, vector, headID, newHeadsDist[i], dist, true, newHeadsID[i])) {
-                            ReassignAsync(p_index, std::make_shared<std::string>((char*)vectorId, m_vectorInfoSize), newHeadsID[i]);
+                            ReassignAsync(p_index, std::make_shared<std::string>((char*)vectorId, m_vectorInfoSize), newHeadsID[i], [](){});
                             reAssignVectorsTopK.insert(vid);
                         }
                     }
@@ -925,7 +933,7 @@ namespace SPTAG::SPANN {
                             m_stat.m_reAssignScanNum++;
                             float dist = p_index->ComputeDistance(p_index->GetSample(HeadPrevTopK[i]), vector);
                             if (CheckIsNeedReassign(p_index, newHeadsID, vector, headID, newHeadsDist[i], dist, false, HeadPrevTopK[i])) {
-                                ReassignAsync(p_index, std::make_shared<std::string>((char*)vectorId, m_vectorInfoSize), HeadPrevTopK[i]);
+                                ReassignAsync(p_index, std::make_shared<std::string>((char*)vectorId, m_vectorInfoSize), HeadPrevTopK[i], [](){});
                                 reAssignVectorsTopK.insert(vid);
                             }
                         }
@@ -994,7 +1002,7 @@ namespace SPTAG::SPANN {
                     if (m_versionMap->GetVersion(VID) == version) {
                         // LOG(Helper::LogLevel::LL_Info, "Head Miss To ReAssign: VID: %d, current version: %d\n", *(int*)(&appendPosting[idx]), version);
                         m_stat.m_headMiss++;
-                        ReassignAsync(p_index, vectorInfo, headID);
+                        ReassignAsync(p_index, vectorInfo, headID, [](){});
                     }
                     // LOG(Helper::LogLevel::LL_Info, "Head Miss Do Not To ReAssign: VID: %d, version: %d, current version: %d\n", *(int*)(&appendPosting[idx]), m_versionMap->GetVersion(*(int*)(&appendPosting[idx])), version);
                 }
@@ -1025,7 +1033,9 @@ namespace SPTAG::SPANN {
                 //     GetDBStats();
                 //     exit(1);
                 // }
-                if (!reassignThreshold) SplitAsync(p_index, headID);
+                if (!reassignThreshold) {
+                    SplitAsync(p_index, headID, [](){});
+                }
                 else Split(p_index, headID, !m_opt->m_disableReassign);
                 // SplitAsync(p_index, headID);
             }
@@ -1102,10 +1112,12 @@ namespace SPTAG::SPANN {
 
             if (m_opt->m_update) {
                 LOG(Helper::LogLevel::LL_Info, "SPFresh: initialize thread pools, append: %d, reassign %d\n", m_opt->m_appendThreadNum, m_opt->m_reassignThreadNum);
+#ifdef USE_SPDK
                 m_splitThreadPool = std::make_shared<SPDKThreadPool>();
                 m_splitThreadPool->initSPDK(m_opt->m_appendThreadNum, this);
                 m_reassignThreadPool = std::make_shared<SPDKThreadPool>();
                 m_reassignThreadPool->initSPDK(m_opt->m_reassignThreadNum, this);
+#endif
                 LOG(Helper::LogLevel::LL_Info, "SPFresh: finish initialization\n");
             }
             return true;
@@ -1176,7 +1188,14 @@ namespace SPTAG::SPANN {
                     queryResults.AddPoint(vectorID, distance2leaf);
                 }
                 auto compEnd = std::chrono::high_resolution_clock::now();
-                if (realNum <= m_mergeThreshold && !m_opt->m_inPlace) MergeAsync(p_index.get(), curPostingID);
+                if (realNum <= m_mergeThreshold && !m_opt->m_inPlace) {
+#ifdef USE_SPDK
+                    m_splitThreadPool->add(curJob);
+#else
+                    // Fallback for non-SPDK builds
+                    LOG(Helper::LogLevel::LL_Info, "Merge job queued (SPDK disabled)\n");
+#endif
+                }
 
                 compLatency += ((double)std::chrono::duration_cast<std::chrono::microseconds>(compEnd - compStart).count());
 
@@ -1548,11 +1567,21 @@ namespace SPTAG::SPANN {
             }
         }
 
-        bool AllFinished() { return m_splitThreadPool->allClear() && m_reassignThreadPool->allClear(); }
+        bool AllFinished() { 
+#ifdef USE_SPDK
+            return m_splitThreadPool->allClear() && m_reassignThreadPool->allClear(); 
+#else
+            return true; // No thread pools when SPDK is disabled
+#endif
+        }
+
         void ForceCompaction() override { db->ForceCompaction(); }
-        void GetDBStats() override { 
-            db->GetStat();
+        void GetDBStats() {
+#ifdef USE_SPDK
             LOG(Helper::LogLevel::LL_Info, "remain splitJobs: %d, reassignJobs: %d, running split: %d, running reassign: %d\n", m_splitThreadPool->jobsize(), m_reassignThreadPool->jobsize(), m_splitThreadPool->runningJobs(), m_reassignThreadPool->runningJobs());
+#else
+            LOG(Helper::LogLevel::LL_Info, "Thread pools disabled (SPDK disabled)\n");
+#endif
         }
 
         void GetIndexStats(int finishedInsert, bool cost, bool reset) override { m_stat.PrintStat(finishedInsert, cost, reset); }

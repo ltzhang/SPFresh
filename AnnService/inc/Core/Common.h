@@ -12,8 +12,14 @@
 #include <limits>
 #include <vector>
 #include <cmath>
-#include "inc/Helper/Logging.h"
-#include "inc/Helper/DiskIO.h"
+#include "../Helper/Logging.h"
+
+// Forward declaration to avoid circular dependency
+namespace SPTAG {
+    namespace Helper {
+        class DiskIO;
+    }
+}
 
 #ifndef _MSC_VER
 #include <stdio.h>

@@ -1,5 +1,6 @@
 #include "inc/Helper/DynamicNeighbors.h"
 #include "inc/Core/Common.h"
+#include "inc/Helper/DiskIO.h"
 
 using namespace SPTAG::Helper;
 

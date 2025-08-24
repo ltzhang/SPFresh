@@ -4,10 +4,14 @@
 #ifndef _SPTAG_HELPER_DISKIO_H_
 #define _SPTAG_HELPER_DISKIO_H_
 
+#include <cstdint>
+#include <string>
+#include <memory>
+#include <vector>
 #include <functional>
 #include <fstream>
 #include <string.h>
-#include <memory>
+#include "inc/Core/Common.h"
 
 namespace SPTAG
 {

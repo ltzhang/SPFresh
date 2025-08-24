@@ -3,6 +3,7 @@
 
 #include "inc/Helper/SimpleIniReader.h"
 #include "inc/Helper/CommonHelper.h"
+#include "inc/Helper/DiskIO.h"
 
 #include <cctype>
 #include <functional>

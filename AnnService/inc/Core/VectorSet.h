@@ -5,6 +5,7 @@
 #define _SPTAG_VECTORSET_H_
 
 #include "CommonDataStructure.h"
+#include "../Helper/DiskIO.h"
 
 namespace SPTAG
 {

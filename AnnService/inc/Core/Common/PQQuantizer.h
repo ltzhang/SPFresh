@@ -7,6 +7,7 @@
 #include "CommonUtils.h"
 #include "DistanceUtils.h"
 #include "IQuantizer.h"
+#include "../../Helper/DiskIO.h"
 #include <iostream>
 #include <fstream>
 #include <limits>

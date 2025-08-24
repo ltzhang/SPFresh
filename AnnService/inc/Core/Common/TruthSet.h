@@ -6,6 +6,7 @@
 
 #include "inc/Core/VectorIndex.h"
 #include "QueryResultSet.h"
+#include "../../Helper/DiskIO.h"
 
 namespace SPTAG
 {
