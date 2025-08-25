@@ -12,27 +12,15 @@ The project uses CMake for building. Essential build steps:
 # Install dependencies first
 sudo apt install cmake libjemalloc-dev libsnappy-dev libgflags-dev pkg-config swig libboost-all-dev libtbb-dev libisal-dev
 
-# Compile SPDK (required third-party dependency)
-cd ThirdParty/spdk
-./scripts/pkgdep.sh
-CC=gcc-9 ./configure
-CC=gcc-9 make -j
-
 # Compile isal-l_crypto
 cd ThirdParty/isal-l_crypto
 ./autogen.sh
 ./configure
 make -j
 
-# Build RocksDB (in rocksdb/ directory)
-mkdir build && cd build
-cmake -DUSE_RTTI=1 -DWITH_JEMALLOC=1 -DWITH_SNAPPY=1 -DCMAKE_C_COMPILER=gcc-9 -DCMAKE_CXX_COMPILER=g++-9 -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-fPIC" ..
-make -j
-sudo make install
-
 # Build SPFresh
 mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug ..
 make -j
 ```
 
@@ -67,19 +55,11 @@ For reproducing research experiments, use scripts in `Script_AE/`:
 - Requires Azure Standard_L16s_v3 instances for full reproduction
 - See `Script_AE/README.md` for detailed instructions
 
-### SPDK Setup
-
-SPFresh uses SPDK for high-performance storage access:
-
 ```bash
 # Bind NVMe device to SPDK
 sudo nvme format /dev/nvme0n1
 sudo ./ThirdParty/spdk/scripts/setup.sh
 cp bdev.json ./
-
-# Reset SPDK (return to kernel driver)
-sudo ./ThirdParty/spdk/scripts/setup.sh reset
-```
 
 ## Architecture Overview
 
@@ -136,7 +116,6 @@ The system uses extensive `.ini` configuration files with sections:
 ## Important Notes
 
 - Requires GCC 9+ for compilation due to C++17 features
-- SPDK requires PCI direct access - disable Secure Boot on Azure VMs
 - Memory-intensive - designed for high-memory Azure L-series instances  
 - Multi-threaded throughout - thread counts configurable via parameters
 - Extensive use of templates for different vector value types (Float, UInt8, Int16, etc.)

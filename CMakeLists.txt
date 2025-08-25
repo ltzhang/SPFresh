@@ -5,6 +5,9 @@ cmake_minimum_required (VERSION 3.12)
 #set(CMAKE_CXX_STANDARD 17)
 #set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+# Generate compile_commands.json for IDE support
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 project (SPTAGLib)
 
 function(CXX_COMPILER_DUMPVERSION _OUTPUT_VERSION)

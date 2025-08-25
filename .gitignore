@@ -64,3 +64,4 @@ dkms.conf
 Debug/
 Release/
 data/
+.cache/
