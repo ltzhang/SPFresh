@@ -38,27 +38,27 @@ pip install -r requirements.txt
 ### Convert Single File
 
 ```bash
-# Convert fvecs file
-python ann_data_converter.py sift/sift_base.fvecs sift_base.bin --format fvecs
+# Convert fvecs file (auto-detects format, saves to current directory)
+python ann_data_converter.py sift/sift_base.fvecs
 
-# Convert ivecs file
-python ann_data_converter.py sift/sift_groundtruth.ivecs groundtruth.bin --format ivecs
-
-# Convert HDF5 file
-python ann_data_converter.py mnist-784-euclidean.hdf5 mnist.bin --format hdf5
+# Convert with custom output directory
+python ann_data_converter.py sift/sift_base.fvecs --output-dir output/
 
 # Convert HDF5 with specific dataset
-python ann_data_converter.py mnist-784-euclidean.hdf5 mnist.bin --format hdf5 --dataset train
+python ann_data_converter.py mnist-784-euclidean.hdf5 --dataset train --output-dir output/
+
+# Skip confirmation prompt
+python ann_data_converter.py sift/sift_base.fvecs --yes
 ```
 
 ### Batch Conversion
 
 ```bash
 # Convert all fvecs files in a directory
-python ann_data_converter.py sift/ output/ --format fvecs --batch
+python ann_data_converter.py sift/ --batch --output-dir output/
 
 # Convert all HDF5 files in a directory
-python ann_data_converter.py . output/ --format hdf5 --batch
+python ann_data_converter.py . --batch --format hdf5 --output-dir output/
 ```
 
 ## Examples
@@ -66,23 +66,30 @@ python ann_data_converter.py . output/ --format hdf5 --batch
 ### Converting SIFT Dataset
 
 ```bash
-# Convert base vectors
-python ann_data_converter.py sift/sift_base.fvecs sift_base.bin --format fvecs
+# Convert base vectors (auto-detects format)
+python ann_data_converter.py sift/sift_base.fvecs
 
 # Convert query vectors
-python ann_data_converter.py sift/sift_query.fvecs sift_query.bin --format fvecs
+python ann_data_converter.py sift/sift_query.fvecs
 
 # Convert learning vectors
-python ann_data_converter.py sift/sift_learn.fvecs sift_learn.bin --format fvecs
+python ann_data_converter.py sift/sift_learn.fvecs
 
 # Convert groundtruth
-python ann_data_converter.py sift/sift_groundtruth.ivecs sift_groundtruth.bin --format ivecs
+python ann_data_converter.py sift/sift_groundtruth.ivecs
+
+# Convert all to specific output directory
+python ann_data_converter.py sift/ --batch --output-dir output/
 ```
 
 ### Converting MNIST HDF5
 
 ```bash
-python ann_data_converter.py mnist-784-euclidean.hdf5 mnist.bin --format hdf5
+# Convert all datasets
+python ann_data_converter.py mnist-784-euclidean.hdf5
+
+# Convert specific dataset
+python ann_data_converter.py mnist-784-euclidean.hdf5 --dataset train
 ```
 
 ## File Format Details
@@ -96,17 +103,17 @@ python ann_data_converter.py mnist-784-euclidean.hdf5 mnist.bin --format hdf5
 ### Binary Output Format
 
 ```
-Header (12 bytes):
+Header (8 bytes):
 - num_vectors: int32 (4 bytes)
-- dimension: int32 (4 bytes) 
-- data_type: int32 (4 bytes)
+- dimension: int32 (4 bytes)
 
 Data:
 - vectors stored row-wise as raw bytes
-- data_type determines component size:
-  - 0: float32 (4 bytes per component)
-  - 1: int32 (4 bytes per component)
-  - 2: uint8 (1 byte per component)
+- data type is determined by the input format:
+  - fvecs: float32 (4 bytes per component)
+  - ivecs: int32 (4 bytes per component)
+  - bvecs: uint8 (1 byte per component)
+  - HDF5: depends on dataset type
 ```
 
 ## Error Handling
@@ -122,3 +129,4 @@ The program includes error handling for:
 - For large files (>1GB), the program reads data in chunks to manage memory
 - HDF5 files are read efficiently using the h5py library
 - Binary output is optimized for fast reading in SPFresh
+
